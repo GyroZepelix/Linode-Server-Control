@@ -1,12 +1,12 @@
 # Linode-Server-Controll
 
-Usage:
-    wog-minecraft-server <flags> up|down
+    Usage:
+        wog-minecraft-server <flags> up|down
 
-    -t <token> Your Linode API Token
+        -t <token> Your Linode API Token
 
-    -h Help
+        -h Help
 
-    -f <file> Path to file with Linode API Token (dont use with -t)
+        -f <file> Path to file with Linode API Token (dont use with -t)
 
-    -p <string> Set root password (default: DefaultLinodeServerPasswordRoot)
+        -p <string> Set root password (default: DefaultLinodeServerPasswordRoot)
