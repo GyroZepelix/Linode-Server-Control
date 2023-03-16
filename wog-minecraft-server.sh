@@ -24,10 +24,10 @@ It is HIGHLY recommended you set the password using the -p flag!\n\n"
 wog_minecraft_server_POST () {
   cat <<EOF
   {
-    "image": "linode/debian11",
+    "image": "private/19386186",
     "region": "eu-central",
     "type": "g6-standard-6",
-    "label": "$linode_server_name",
+    "label": "wog-minecraft-server",
     "tags": [],
     "root_pass": "$rootPassword",
     "authorized_users": [
@@ -35,10 +35,8 @@ wog_minecraft_server_POST () {
     ],
     "booted": true,
     "backups_enabled": false,
-    "private_ip": false,
-    "stackscript_id": 1139518,
-    "stackscript_data": {}
-  }
+    "private_ip": false
+}
 EOF
 }
 
