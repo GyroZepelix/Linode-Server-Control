@@ -8,7 +8,6 @@ rootPassword=''
 
 defaultRootPassword='DefaultLinodeServerPasswordRoot'
 
-volume_name='WOG-Server'
 
 
 check_default_password () {
@@ -53,25 +52,9 @@ command_status () {
   \n"
 }
 
-volume_with_name () {
-  curl -sH "Authorization: Bearer $token" \
-    https://api.linode.com/v4/volumes | jq -r --arg key $volume_name '.data[] | select(.label==$key)'
-
 }
 
-# $1 is id of the linode to attach the volume to
-attach_volume () {
 
-  volume_id=$(volume_with_name | jq -r '.id')
-
-
-  curl -H "Content-Type: application/json" \
-    -H "Authorization: Bearer $token" \
-    -X POST -d '{
-      "linode_id": '$1'
-    }' \
-    https://api.linode.com/v4/volumes/$volume_id/attach
-}
 
 
 command_up () {
@@ -83,8 +66,6 @@ command_up () {
     https://api.linode.com/v4/linode/instances)
 
   printf "\n\nServer Booting Up!\n"
-
-  attach_volume $(echo $post_output | jq -r '.id')
 
   printf "\n\n Connect to the instance with ssh root@$(echo $post_output | jq -r '.ipv4[0]')\n"
 }
