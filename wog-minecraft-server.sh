@@ -21,6 +21,11 @@ It is HIGHLY recommended you set the password using the -p flag!\n\n"
   fi
 }
 
+latest_private_image () {
+ curl -H "Authorization: Bearer $token" \
+    https://api.linode.com/v4/images
+}
+
 wog_minecraft_server_POST () {
   cat <<EOF
   {
@@ -127,6 +132,9 @@ then
 elif [ "$1" = 'down' ]
 then
   command_down
+elif [ "$1" = 'test' ]
+then
+  latest_private_image | jq '.'
 else
   printf "Invalid command!\n\n"
   print_usage
