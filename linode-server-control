@@ -104,7 +104,7 @@ waitfor_create_image () {
     if [ "$response" == "available" ]; then
       break
     fi
-      printf ". (status = $response) )\n"
+      printf ". (status = $response )\n"
       sleep 5
   done
 }
