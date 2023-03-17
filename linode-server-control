@@ -113,14 +113,17 @@ create_linode_image () {
 
   disk_id=$(curl -sH "Authorization: Bearer $token" \
     https://api.linode.com/v4/linode/instances/$1/disks | jq -r '.data[0].id')
+  echo $disk_id - diskid
 
   image_id=$(curl -sH "Content-Type: application/json" \
     -H "Authorization: Bearer $token" \
     -X POST -d '{
       "disk_id": '$disk_id',
-      "label": "$linode_image_name"
+      "label": "'"$linode_image_name"'"
     }' \
     https://api.linode.com/v4/images | jq -r '.id')
+
+  echo $image_id - imageid
 
   waitfor_create_image $image_id
 }
