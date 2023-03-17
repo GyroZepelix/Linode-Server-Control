@@ -1,29 +1,37 @@
 #!/bin/bash
 
+
+# ----- Variables -----
+
 linode_server_name="wog-minecraft-server"
 
 token=''
 pathToToken=''
 rootPassword=''
 
+pathToToken="./LINODE_API_TOKEN"
+pathToToken=$(readlink -f $pathToToken)
+token=$(cat $pathToToken)
+
 defaultRootPassword='DefaultLinodeServerPasswordRoot'
 
 
+# ----- Functions -----
 
 check_default_password () {
   if [ "$rootPassword" = '' ]
   then
     printf "
-Root password not set!
-It will be defaulted to '$defaultRootPassword'!
-It is HIGHLY recommended you set the password using the -p flag!\n\n"
+  Root password not set!
+  It will be defaulted to '$defaultRootPassword'!
+  It is HIGHLY recommended you set the password using the -p flag!\n\n"
     rootPassword=$defaultRootPassword
   fi
 }
 
 latest_private_image () {
  curl -H "Authorization: Bearer $token" \
-    https://api.linode.com/v4/images
+    https://api.linode.com/v4/images | jq '.data[] | select(.id | startswith("private")) | sort_by(.created) '
 }
 
 wog_minecraft_server_POST () {
@@ -41,8 +49,61 @@ wog_minecraft_server_POST () {
     "booted": true,
     "backups_enabled": false,
     "private_ip": false
-}
+  }
 EOF
+}
+
+waitfor_shutdown () {
+  printf "\nWaiting for shutdown...\n"
+  while true; do
+    response=$(curl -s -H "Content-Type: application/json" \
+                  -H "Authorization: Bearer $token" \
+                  "https://api.linode.com/v4/linode/instances/$1" \
+              | jq -r '.status')
+    if [ "$response" == "offline" ]; then
+      break
+    fi
+      printf ". (status = $response)\n"
+      sleep 5
+  done
+}
+
+shutdown_linode () {
+  curl -sH "Content-Type: application/json" \
+    -H "Authorization: Bearer $token" \
+    -X POST \
+    https://api.linode.com/v4/linode/instances/$1/shutdown
+}
+
+waitfor_create_image () {
+  printf "\nWriting image of linode...\n"
+  while true; do
+    response=$(curl -s -H "Content-Type: application/json" \
+                  -H "Authorization: Bearer $token" \
+                  "https://api.linode.com/v4/images" \
+              | jq -r --arg key $1 '.data[] | select(.id==$key) | .status')
+    if [ "$response" == "available" ]; then
+      break
+    fi
+      printf ". (status = $response) )\n"
+      sleep 5
+  done
+}
+
+create_linode_image () {
+
+  disk_id=$(curl -sH "Authorization: Bearer $token" \
+    https://api.linode.com/v4/linode/instances/$1/disks | jq -r '.data[0].id')
+
+  image_id=$(curl -sH "Content-Type: application/json" \
+    -H "Authorization: Bearer $token" \
+    -X POST -d '{
+      "disk_id": '$disk_id',
+      "label": "wog"
+    }' \
+    https://api.linode.com/v4/images | jq -r '.id')
+
+  waitfor_create_image $image_id
 }
 
 command_status () {
@@ -54,11 +115,6 @@ command_status () {
   printf "Current up servers:\n$status_formated
   \n"
 }
-
-}
-
-
-
 
 command_up () {
   check_default_password
@@ -80,6 +136,11 @@ command_down () {
   
   echo $linode_minecraft_id
 
+  shutdown_linode $linode_minecraft_id
+  waitfor_shutdown $linode_minecraft_id
+
+  create_linode_image $linode_minecraft_id
+
   curl -H "Authorization: Bearer $token" \
     -X DELETE \
     https://api.linode.com/v4/linode/instances/$linode_minecraft_id
@@ -87,16 +148,19 @@ command_down () {
 
 print_usage() {
   printf "Usage:
-    wog-minecraft-server <flags> up|down\n
+    wog-minecraft-server <flags> up|down|status\n
     -t <token> Your Linode API Token\n
     -h Help\n
-    -f <file> Path to file with Linode API Token (dont use with -t)\n
+    -f <file> Path to file with Linode API Token (default "./LINODE_API_TOKEN")\n
     -p <string> Set root password (default: $defaultRootPassword)\n
     "
 
 }
 
-while getopts 'ht:f:p_' flag; do
+
+# ----- Flags! -----
+
+while getopts 'ht:f:p:' flag; do
   case "${flag}" in
     h) 
        print_usage
@@ -116,6 +180,9 @@ while getopts 'ht:f:p_' flag; do
 done
 shift $((OPTIND - 1))
 
+
+# ----- "What to do" Options -----
+
 if [ "$token" = '' ]
 then
   printf "Token required!\n\n"
@@ -134,7 +201,7 @@ then
   command_down
 elif [ "$1" = 'test' ]
 then
-  latest_private_image | jq '.'
+  latest_private_image
 else
   printf "Invalid command!\n\n"
   print_usage
