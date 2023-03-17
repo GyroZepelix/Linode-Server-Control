@@ -4,6 +4,7 @@
 # ----- Variables -----
 
 linode_server_name="wog-minecraft-server"
+linode_image_name="wog-minecraft-server"
 
 token=''
 pathToToken=''
@@ -18,6 +19,7 @@ defaultRootPassword='DefaultLinodeServerPasswordRoot'
 
 # ----- Functions -----
 
+
 check_default_password () {
   if [ "$rootPassword" = '' ]
   then
@@ -29,15 +31,32 @@ check_default_password () {
   fi
 }
 
-latest_private_image () {
- curl -H "Authorization: Bearer $token" \
-    https://api.linode.com/v4/images | jq '.data[] | select(.id | startswith("private")) | sort_by(.created) '
+keep_only_x_images () {
+  images=$(private_images_by_created_time | jq --arg key $linode_image_name 'select(.label==$key)')
+  if [ $( echo $images | jq '.id' | wc -l) -gt $1 ]; then
+    oldest_image=$(echo $images | jq -rs 'last | .id')
+    curl -s -H "Authorization: Bearer $TOKEN" -X DELETE https://api.linode.com/v4/images/$oldest_image
+  fi
 }
+
+private_images_by_created_time () {
+ curl -sH "Authorization: Bearer $token" \
+    https://api.linode.com/v4/images | jq '.data | sort_by(.created) | reverse | .[] | select(.id | startswith("private"))'
+}
+
+latest_private_image () {
+  private_images_by_created_time | jq -rs 'first | .id'
+}
+
+oldest_private_image () {
+  private_images_by_created_time | jq -rs 'last | .id'
+}
+
 
 wog_minecraft_server_POST () {
   cat <<EOF
   {
-    "image": "private/19386186",
+    "image": "$1",
     "region": "eu-central",
     "type": "g6-standard-6",
     "label": "wog-minecraft-server",
@@ -99,7 +118,7 @@ create_linode_image () {
     -H "Authorization: Bearer $token" \
     -X POST -d '{
       "disk_id": '$disk_id',
-      "label": "wog"
+      "label": "$linode_image_name"
     }' \
     https://api.linode.com/v4/images | jq -r '.id')
 
@@ -119,9 +138,11 @@ command_status () {
 command_up () {
   check_default_password
 
+  image_to_boot_up=$(latest_private_image)
+
   post_output=$(curl -sH "Content-Type: application/json" \
     -H "Authorization: Bearer $token" \
-    -X POST -d "$(wog_minecraft_server_POST)" \
+    -X POST -d "$(wog_minecraft_server_POST $image_to_boot_up)" \
     https://api.linode.com/v4/linode/instances)
 
   printf "\n\nServer Booting Up!\n"
@@ -140,6 +161,7 @@ command_down () {
   waitfor_shutdown $linode_minecraft_id
 
   create_linode_image $linode_minecraft_id
+  keep_only_x_images 2
 
   curl -H "Authorization: Bearer $token" \
     -X DELETE \
@@ -201,7 +223,7 @@ then
   command_down
 elif [ "$1" = 'test' ]
 then
-  latest_private_image
+  echo test
 else
   printf "Invalid command!\n\n"
   print_usage
