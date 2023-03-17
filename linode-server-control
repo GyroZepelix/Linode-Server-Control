@@ -5,6 +5,7 @@
 
 linode_server_name="wog-minecraft-server"
 linode_image_name="wog-minecraft-server"
+linode_subdomain="server"
 
 token=''
 pathToToken=''
@@ -35,7 +36,7 @@ keep_only_x_images () {
   images=$(private_images_by_created_time | jq --arg key $linode_image_name 'select(.label==$key)')
   if [ $( echo $images | jq '.id' | wc -l) -gt $1 ]; then
     oldest_image=$(echo $images | jq -rs 'last | .id')
-    curl -s -H "Authorization: Bearer $TOKEN" -X DELETE https://api.linode.com/v4/images/$oldest_image
+    curl -s -H "Authorization: Bearer $token" -X DELETE https://api.linode.com/v4/images/$oldest_image
   fi
 }
 
@@ -128,6 +129,26 @@ create_linode_image () {
   waitfor_create_image $image_id
 }
 
+domain_available_id () {
+  curl -sH "Authorization: Bearer $token" \
+    https://api.linode.com/v4/domains | jq '.data | first | .id'
+}
+
+change_aaaa_records () {
+
+  domain_id=$(domain_available_id)
+
+  record_id=$(curl -sH "Authorization: Bearer $token" \
+    https://api.linode.com/v4/domains/$domain_id/records | jq --arg key $linode_subdomain '.data[] | select(.name==$key) | .id')
+
+  curl -H "Content-Type: application/json" \
+    -H "Authorization: Bearer $token" \
+    -X PUT -d '{
+      "target": "'"$1"'"
+    }' \
+    https://api.linode.com/v4/domains/$domain_id/records/$record_id
+}
+
 command_status () {
   status_json=$(curl -sH "Authorization: Bearer $token" \
     https://api.linode.com/v4/linode/instances)
@@ -150,14 +171,20 @@ command_up () {
 
   printf "\n\nServer Booting Up!\n"
 
-  printf "\n\n Connect to the instance with ssh root@$(echo $post_output | jq -r '.ipv4[0]')\n"
+  server_ip=$(echo $post_output | jq -r '.ipv4[0]')
+
+  change_aaaa_records $server_ip
+
+  printf "\n\n Connect to the instance with ssh root@$server_ip\n"
 }
 
 command_down () {
-  linode_minecraft_id=$(curl -sH "Authorization: Bearer $token" \
+  linode_minecraft=$(curl -sH "Authorization: Bearer $token" \
     https://api.linode.com/v4/linode/instances | \
-    jq --arg key $linode_server_name '.data[] | select(.label==$key) | .id')
+    jq --arg key $linode_server_name '.data[] | select(.label==$key)')
   
+  linode_minecraft_id=$(echo $linode_minecraft | jq '.id')
+
   echo $linode_minecraft_id
 
   shutdown_linode $linode_minecraft_id
